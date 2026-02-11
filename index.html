@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="no-referrer">
+    <meta name="format-detection" content="telephone=no">
+    <title>视频去水印工具（网页版）</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: sans-serif;
+        }
+        body {
+            background: #f5f5f5;
+            padding: 15px;
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .container {
+            width: 100%;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            margin: 20px 0;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+            font-size: 20px;
+        }
+        .tip {
+            background: #fffbe6;
+            border: 1px solid #ffe58f;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #fa8c16;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 30px 15px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: border-color 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .upload-area:active {
+            border-color: #409eff;
+        }
+        .upload-area p {
+            font-size: 15px;
+            color: #666;
+        }
+        .upload-area p:last-child {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #999;
+        }
+        #fileInput {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+        }
+        .video-preview {
+            width: 100%;
+            max-height: 300px;
+            margin: 15px 0;
+            display: none;
+            border: 1px solid #eee;
+            border-radius: 6px;
+            object-fit: contain;
+        }
+        .area-selector {
+            position: relative;
+            margin: 20px 0;
+            display: none;
+        }
+        .area-selector p {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .selector-mask {
+            width: 100%;
+            height: 300px;
+            background: rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+            border-radius: 6px;
+        }
+        .watermark-box {
+            position: absolute;
+            width: 80px;
+            height: 40px;
+            border: 2px solid #ff4d4f;
+            background: rgba(255,77,79,0.2);
+            cursor: move;
+            resize: both;
+            overflow: hidden;
+            touch-action: none;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            background: #409eff;
+            color: white;
+            cursor: pointer;
+            font-size: 15px;
+            flex: 1;
+            min-width: 120px;
+            transition: background 0.2s;
+        }
+        button:hover, button:active {
+            background: #66b1ff;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .process-status {
+            margin: 20px 0;
+            font-size: 15px;
+            color: #666;
+            display: none;
+            line-height: 1.6;
+            min-height: 20px;
+        }
+        .download-btn {
+            background: #52c41a;
+            display: none;
+        }
+        .info {
+            color: #999;
+            font-size: 13px;
+            margin-top: 15px;
+            line-height: 1.6;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>视频去水印工具（网页版）</h1>
+        <div class="tip">
+            ✅ 所有操作本地完成，视频永不上传 | 推荐Chrome/Edge浏览器 | 支持MP4/MOV格式
+        </div>
+        <div class="upload-area">
+            <input type="file" id="fileInput" accept="video/mp4,video/mov" capture="none">
+            <p>点击选择本地视频</p>
+            <p>最大支持200MB | 处理后自动下载</p>
+        </div>
+
+        <video class="video-preview" id="videoPreview" controls playsinline webkit-playsinline></video>
+
+        <div class="area-selector" id="areaSelector">
+            <p>拖动红色框选中水印区域，可调整大小</p>
+            <div class="selector-mask" id="selectorMask">
+                <div class="watermark-box" id="watermarkBox"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="processBtn" disabled>
+                <span id="btnText">开始处理</span>
+            </button>
+            <button id="downloadBtn" class="download-btn">下载视频</button>
+        </div>
+
+        <div class="process-status" id="processStatus"></div>
+
+        <div class="info">
+            1. 首次使用需加载处理引擎（约5秒），请耐心等待；<br>
+            2. 大视频处理需1-3分钟，请勿关闭页面；<br>
+            3. 处理完成后视频自动保存到浏览器下载文件夹。
+        </div>
+    </div>
+
+    <script src="https://cdn.staticfile.org/@ffmpeg/ffmpeg/0.12.6/ffmpeg.min.js"></script>
+    <script>
+        // FFmpeg初始化（适配浏览器）
+        const { createFFmpeg, fetchFile } = FFmpeg;
+        const ffmpeg = createFFmpeg({
+            log: false,
+            corePath: 'https://cdn.staticfile.org/@ffmpeg/core/0.12.4/ffmpeg-core.js',
+            workerPath: 'https://cdn.staticfile.org/@ffmpeg/core/0.12.4/ffmpeg-core.worker.js'
+        });
+
+        // DOM元素
+        const fileInput = document.getElementById('fileInput');
+        const videoPreview = document.getElementById('videoPreview');
+        const areaSelector = document.getElementById('areaSelector');
+        const selectorMask = document.getElementById('selectorMask');
+        const watermarkBox = document.getElementById('watermarkBox');
+        const processBtn = document.getElementById('processBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const processStatus = document.getElementById('processStatus');
+        const btnText = document.getElementById('btnText');
+
+        // 全局变量
+        let videoFile = null;
+        let videoWidth = 0;
+        let videoHeight = 0;
+        let maskWidth = 0;
+        let maskHeight = 0;
+        let boxX = 0;
+        let boxY = 0;
+        let boxWidth = 80;
+        let boxHeight = 40;
+        let isProcessing = false;
+
+        // 统一处理文件选择
+        function handleFile(file) {
+            // 大小限制
+            const maxSize = 200 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert('暂不支持处理200MB以上视频，请选择更小的文件！');
+                return;
+            }
+            // 格式限制
+            if (!['video/mp4', 'video/quicktime'].includes(file.type)) {
+                alert('请选择MP4/MOV格式视频！');
+                return;
+            }
+
+            videoFile = file;
+            // 浏览器兼容的预览方式
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                videoPreview.src = e.target.result;
+                videoPreview.style.display = 'block';
+                videoPreview.onloadedmetadata = () => {
+                    videoWidth = videoPreview.videoWidth;
+                    videoHeight = videoPreview.videoHeight;
+                    // 计算预览区域缩放比例
+                    const maskRatio = selectorMask.clientWidth / videoWidth;
+                    maskWidth = selectorMask.clientWidth;
+                    maskHeight = videoHeight * maskRatio;
+                    selectorMask.style.height = `${maskHeight}px`;
+                    // 显示水印选择框
+                    areaSelector.style.display = 'block';
+                    processBtn.disabled = false;
+                    // 初始化水印框位置
+                    watermarkBox.style.left = '50%';
+                    watermarkBox.style.top = '50%';
+                    watermarkBox.style.transform = 'translate(-50%, -50%)';
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 文件选择事件（浏览器原生）
+        fileInput.addEventListener('change', function(e) {
+            if (e.target.files.length === 0) return;
+            const file = e.target.files[0];
+            handleFile(file);
+        });
+
+        // 水印框拖拽逻辑（适配移动端浏览器）
+        let isDragging = false;
+        let startX, startY;
+        function addMultiEvent(el, events, handler) {
+            events.split(' ').forEach(event => el.addEventListener(event, (e) => {
+                e.preventDefault();
+                handler(e);
+            }));
+        }
+        addMultiEvent(watermarkBox, 'mousedown touchstart', (e) => {
+            if (e.target === watermarkBox) {
+                isDragging = true;
+                const clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+                startX = clientX - watermarkBox.offsetLeft;
+                startY = clientY - watermarkBox.offsetTop;
+                watermarkBox.style.cursor = 'move';
+            }
+        });
+        addMultiEvent(document, 'mousemove touchmove', (e) => {
+            if (!isDragging) return;
+            const clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+            const clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+            const newX = clientX - startX - selectorMask.offsetLeft;
+            const newY = clientY - startY - selectorMask.offsetTop;
+            const maxX = maskWidth - watermarkBox.offsetWidth;
+            const maxY = maskHeight - watermarkBox.offsetHeight;
+            boxX = Math.max(0, Math.min(newX, maxX));
+            boxY = Math.max(0, Math.min(newY, maxY));
+            watermarkBox.style.left = `${boxX}px`;
+            watermarkBox.style.top = `${boxY}px`;
+            watermarkBox.style.transform = 'none';
+        });
+        addMultiEvent(document, 'mouseup touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                watermarkBox.style.cursor = 'default';
+                boxWidth = watermarkBox.offsetWidth;
+                boxHeight = watermarkBox.offsetHeight;
+            }
+        });
+
+        // 视频处理逻辑（适配浏览器）
+        processBtn.addEventListener('click', async () => {
+            if (isProcessing || !videoFile) return;
+            isProcessing = true;
+            processBtn.disabled = true;
+            btnText.innerHTML = '<span class="loading"></span>处理中';
+            processStatus.style.display = 'block';
+            processStatus.textContent = '正在加载处理引擎...（首次使用需下载）';
+
+            try {
+                if (!ffmpeg.isLoaded()) {
+                    const loadPromise = ffmpeg.load();
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('引擎加载超时，请检查网络')), 30000);
+                    });
+                    await Promise.race([loadPromise, timeoutPromise]);
+                }
+
+                processStatus.textContent = '正在解析视频，请稍候...';
+                const ratioX = videoWidth / maskWidth;
+                const ratioY = videoHeight / maskHeight;
+                const realX = Math.round(boxX * ratioX);
+                const realY = Math.round(boxY * ratioY);
+                const realWidth = Math.round(boxWidth * ratioX);
+                const realHeight = Math.round(boxHeight * ratioY);
+
+                ffmpeg.FS('writeFile', 'input.mp4', await fetchFile(videoFile));
+                processStatus.textContent = '正在模糊水印区域...请耐心等待';
+
+                await ffmpeg.run(
+                    '-i', 'input.mp4',
+                    '-vf', `boxblur=10:10:enable='between(x,${realX},${realX+realWidth})*between(y,${realY},${realY+realHeight})'`,
+                    '-c:a', 'copy',
+                    '-c:v', 'libx264',
+                    '-preset', 'ultrafast',
+                    '-crf', '28',
+                    '-movflags', '+faststart',
+                    '-y',
+                    'output.mp4'
+                );
+
+                processStatus.textContent = '处理完成，准备下载...';
+                const data = ffmpeg.FS('readFile', 'output.mp4');
+                const blob = new Blob([data.buffer], { type: 'video/mp4' });
+                const url = URL.createObjectURL(blob);
+
+                downloadBtn.style.display = 'inline-block';
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `去水印_${new Date().getTime()}.mp4`;
+                    a.click();
+                    setTimeout(() => {
+                        URL.revokeObjectURL(url);
+                        alert('下载成功！请到浏览器下载文件夹查看');
+                    }, 1000);
+                };
+
+                processStatus.textContent = '✅ 处理完成！点击按钮下载视频';
+                btnText.textContent = '处理完成';
+            } catch (error) {
+                console.error('处理失败：', error);
+                processStatus.textContent = `❌ 处理失败：${error.message || '请更换MP4视频重试'}`;
+                btnText.textContent = '开始处理';
+                processBtn.disabled = false;
+                isProcessing = false;
+            }
+        });
+
+        // 页面卸载清理资源
+        window.addEventListener('beforeunload', () => {
+            if (ffmpeg.isLoaded()) {
+                try { ffmpeg.FS('unlink', 'input.mp4'); } catch (e) {}
+                try { ffmpeg.FS('unlink', 'output.mp4'); } catch (e) {}
+            }
+            if (videoPreview.src) videoPreview.src = '';
+        });
+    </script>
+</body>
+</html>
